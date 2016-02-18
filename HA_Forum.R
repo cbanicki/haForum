@@ -1,27 +1,3 @@
-HA_Scrape <- function(Burl) {
-  
-  mybrowser$navigate(Burl)
-  
-  wxmessage <- mybrowser$findElement(using = 'css selector', "p") 
-  
-  #Get the curren URL 
-  HA_ThreadDtl <- read_html(wxmessage$getCurrentUrl()[[1]])
-  
-  #Capture the text from the first page of comments
-  # Will need to turn this into a vector with one element for each Post potentially
-  # Also, will need to loop through the pages on each forum post to collect all of the comments
-  # i <- i + 1
-  
-  ThreadText <- HA_ThreadDtl %>%
-    html_nodes("p") %>%
-    html_text() 
-  
-  # HA_ThreadDtl
-  
-  #append(ThreadDtl,ThreadText)
-  return(ThreadText)
-  #ThreadText
-}
 
 
 HA_Forum <- function() {
@@ -88,13 +64,80 @@ HA_Forum <- function() {
    
     write.table(ThreadText, dest, sep="\t")
 
-    write.table(ThreadText, all, sep="\t",append=TRUE, col.names=FALSE)
+    write.csv(ThreadText, all, sep="\t",append=TRUE, col.names=FALSE)
   }
   
   path <- "threadData"
   dir.create(path, showWarnings=FALSE)
   files <- sapply(urls, download.maybe, path=path)
 
-
+  makeGraph(all)
 
 }
+
+
+HA_Scrape <- function(Burl) {
+  
+  mybrowser$navigate(Burl)
+  
+  wxmessage <- mybrowser$findElement(using = 'css selector', "p") 
+  
+  #Get the curren URL 
+  HA_ThreadDtl <- read_html(wxmessage$getCurrentUrl()[[1]])
+  
+  #Capture the text from the first page of comments
+  # Will need to turn this into a vector with one element for each Post potentially
+  # Also, will need to loop through the pages on each forum post to collect all of the comments
+  # i <- i + 1
+  
+  ThreadText <- HA_ThreadDtl %>%
+    html_nodes("p") %>%
+    html_text() 
+  
+  # HA_ThreadDtl
+  
+  #append(ThreadDtl,ThreadText)
+  return(ThreadText)
+  #ThreadText
+}
+
+
+makeGraph <- function(all) {
+
+#png("wordcloud_storm.png", width=12,height=8, units='in', res=300)
+
+png("wordcloud_storm.png", width=1200,height=800)  
+
+require(wordcloud) 
+require(tm)
+
+data <- read.csv("threadData//ALL.csv")
+
+
+#mydata = read.table("mydata.txt")
+
+pal <- brewer.pal(9,"YlGnBu")
+pal <- pal[-(1:4)]
+
+dataCorpus <- Corpus(VectorSource(data))
+
+dataCorpus <- tm_map(dataCorpus, stripWhitespace)
+
+dataCorpus <- tm_map(dataCorpus, removeWords, stopwords("english"))
+
+#dataCorpus <- tm_map(dataCorpus, removeWords, c("excessive", "extreme", "unseasonal"))
+
+dataCorpus <- tm_map(dataCorpus, PlainTextDocument)
+
+
+dataCorpus <- tm_map(dataCorpus, stemDocument)
+
+wordcloud(dataCorpus, max.words = 50, random.order = FALSE,
+          rot.per=0.35, use.r.layout=TRUE, colors=pal, main="HomeAway Community Forum")
+
+dev.off()
+
+}
+
+
+
