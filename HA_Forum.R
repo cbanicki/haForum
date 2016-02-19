@@ -6,6 +6,7 @@ HA_Forum <- function() {
   library(rvest)
   library(XML)
   library("RSelenium")
+  library(stringr)
   
   
   startServer()
@@ -42,69 +43,149 @@ HA_Forum <- function() {
   mybrowser$navigate("https://community.homeaway.com/community/us")
   
   
-  #  Murl <- "https://community.homeaway.com/community/us"
-  library(stringr)
-  html <- paste(readLines(url), collapse="\n")
-  matched <- str_match_all(html, "<a href=\"(.*?)\"")
-  links <- matched[[1]][, 2]
+  url <- "https://community.homeaway.com/community/us"
   
-  # Get just the thread links
-  TLinks <- grep("\\<thread\\>",links, value=T)
   
-  #Append the base Url to the Thread to get the full URL
-  urls <- sapply("https://community.homeaway.com",paste,TLinks,sep="")
+  # Get thread links
+ urls <- GetLinks(url)
+
   
-  all <- file.path(path, "ALL")  
+  #For testing only
+  #subUrls <- unique(c(urls[grep("52741",url, fixed=T)],urls[grep("52481",urls, fixed=T)]))
+  
+  
+
   
   download.maybe <- function(Turl, refetch=TRUE, path=".") {
     dest <- file.path(path, basename(Turl))
  
-    #if (refetch || !file.exists(dest))
-      HA_Scrape(Turl)
-   
-    write.table(ThreadText, dest, sep="\t")
+      HA_Scrape(Turl) #52741 has one page and 52481 has many pages
 
-    write.csv(ThreadText, all, sep="\t",append=TRUE, col.names=FALSE)
   }
   
   path <- "threadData"
+  all <- file.path(path, "ALL")  
   dir.create(path, showWarnings=FALSE)
-  files <- sapply(urls, download.maybe, path=path)
+  files <- sapply(urls, download.maybe, path=path) # use urls for prod and subUrls for testing
 
-  makeGraph(all)
+
+  files.df <- as.data.frame(do.call(cbind, files))
+  
+  colNames <- substr(urls, 39, 45) 
+  
+  names(files.df) <- colNames
+  
+  
+ # write.table(files.df,"ThreadText.txt", sep="\t")
+  
+  save(files.df,file="threads.Rda")
+  
+  #  load("threads.Rda")
+  
+
 
 }
 
 
+#***************************************************************************************************************
+#**************************************************************************************************************
 HA_Scrape <- function(Burl) {
   
   mybrowser$navigate(Burl)
   
-  wxmessage <- mybrowser$findElement(using = 'css selector', "p") 
+  ThreadText <- c()
   
-  #Get the curren URL 
-  HA_ThreadDtl <- read_html(wxmessage$getCurrentUrl()[[1]])
+  #ThreadText <- data.frame() 
   
-  #Capture the text from the first page of comments
-  # Will need to turn this into a vector with one element for each Post potentially
-  # Also, will need to loop through the pages on each forum post to collect all of the comments
-  # i <- i + 1
+  ThreadUrls <- GetLinks(Burl)
   
-  ThreadText <- HA_ThreadDtl %>%
-    html_nodes("p") %>%
-    html_text() 
+  #ThreadUrls <- list(Burl, GetLinks(Burl))
   
-  # HA_ThreadDtl
+  #ThreadUrls.df = as.data.frame(do.call(rbind, ThreadUrls))
   
-  #append(ThreadDtl,ThreadText)
+  ThreadScrape <- function(ThreadUrls) {
+    
+  ThreadDetails <- c() 
+  
+  
+  out <- tryCatch({
+    
+    mybrowser$navigate(ThreadUrls)
+    
+    wxmessage <- mybrowser$findElement(using = 'css selector', "p") 
+    
+    #Get the curren URL 
+    HA_ThreadDtl <- read_html(wxmessage$getCurrentUrl()[[1]])
+    
+    #Capture the text from the comments
+    ThreadDetails <- HA_ThreadDtl %>%
+      html_nodes("p") %>%
+      html_text() 
+  },
+  error=function(cond){
+    message(paste("URL does not seem to exist:", ThreadUrls))
+    message("Here's the original error message:")
+    message(cond)
+    # Choose a return value in case of error
+    return(NA)},
+  finally={
+    return(ThreadDetails)
+
+  }
+  
+  )
+  
+
+  
+  }
+  
+  
+  ThreadText <- sapply(ThreadUrls, ThreadScrape) # append(ThreadText,sapply(ThreadUrls, ThreadScrape))
+  
+            
   return(ThreadText)
-  #ThreadText
+
+ 
+}      
+
+
+#***************************************************************************************************************
+#**************************************************************************************************************
+
+
+GetLinks <- function(Zurl)  {
+  
+  
+  mybrowser$navigate(Zurl)
+  
+ 
+  html <- paste(readLines(Zurl), collapse="\n")
+  matched <- str_match_all(html, "<a href=\"(.*?)\"")
+  links <- matched[[1]][, 2]
+  
+  # Get just the thread links
+  TSLinks <- grep("/thread/",links, value=T)
+  
+  #Append the base Url to the Thread to get the full URL
+  Nurls <- sapply("https://community.homeaway.com",paste,TSLinks,sep="")
+  
+  Nurls <- unique(Nurls)
+  
+  return(Nurls)
+  
 }
+
+
+
+#***************************************************************************************************************
+#**************************************************************************************************************
+
+
+
 
 
 makeGraph <- function(all) {
 
-#png("wordcloud_storm.png", width=12,height=8, units='in', res=300)
 
 png("wordcloud_storm.png", width=1200,height=800)  
 
@@ -139,5 +220,7 @@ dev.off()
 
 }
 
+#***************************************************************************************************************
+#**************************************************************************************************************
 
 
