@@ -100,7 +100,7 @@ HA_Forum <- function() {
     #Can be used to load the data file later
     #  load("threads.Rda")
     
-
+    #mineThread(files.df)
 
 }
 
@@ -248,4 +248,187 @@ HA_Forum <- function() {
   
 #**************************************************************************************************************
 
+ mindThread <- function(files.df) {
+   #All of this was taken from here:
+   #https://rstudio-pubs-static.s3.amazonaws.com/31867_8236987cf0a8444e962ccd2aec46d9c3.html
+   
+   
+   library(tm)   
+   threads <- Corpus(VectorSource(files.df))  
+   
+   #summary(threads)
+   
+    #inspect(threads[2])
+   
+   #remove puncutation
+   threads <- tm_map(threads, removePunctuation)  
+   
+      # To remove special characters
+      #    for(j in seq(docs))   
+      #    {   
+      #      docs[[j]] <- gsub("/", " ", docs[[j]])   
+      #      docs[[j]] <- gsub("@", " ", docs[[j]])   
+      #      docs[[j]] <- gsub("\\|", " ", docs[[j]])   
+      #    } 
+   
+   #remove numbers
+   threads <- tm_map(threads, removeNumbers)
+   
+   # make lowercase
+   threads <- tm_map(threads, tolower) 
+   
+   #remove stopwords
+   threads <- tm_map(threads, removeWords, stopwords("english"))
+   
+   #remove specific words
+  threads <- tm_map(threads, removeWords, c("will", "voir", "just","get","can"))
+  
+  #combining words that should stay together
+#   for (j in seq(docs))
+#   {
+#     docs[[j]] <- gsub("qualitative research", "QDA", docs[[j]])
+#     docs[[j]] <- gsub("qualitative studies", "QDA", docs[[j]])
+#     docs[[j]] <- gsub("qualitative analysis", "QDA", docs[[j]])
+#     docs[[j]] <- gsub("research methods", "research_methods", docs[[j]])
+#   }
+  
+  #remove word endings like 'ing' 'es' 's'
+  library(SnowballC)   
+  threads <- tm_map(threads, stemDocument)   
 
+  #strip whitespace
+  threads <- tm_map(threads, stripWhitespace)  
+  
+  #treat as text documents...make sure to use this   
+  threads <- tm_map(threads, PlainTextDocument) 
+  
+  #create a document term matrix
+  dtm <- DocumentTermMatrix(threads)
+  
+  #transpose the matrix
+  tdm <- TermDocumentMatrix(threads) 
+  
+  freq <- colSums(as.matrix(dtm))  
+  
+  #length(freq)
+  
+  ord <- order(freq) 
+  
+#   If you prefer to export the matrix to Excel:   
+#     m <- as.matrix(dtm)   
+#   dim(m)   
+#   write.csv(m, file="dtm.csv") 
+  
+  #  Start by removing sparse terms:   
+  dtms <- removeSparseTerms(dtm, 0.1) # This makes a matrix that is 10% empty space, maximum.   
+  #inspect(dtms) 
+  
+  #There are a lot of terms, so for now, just check out some of the most and least frequently occurring words.
+  #freq[head(ord)]  
+  
+  #Check out the frequency of frequencies.
+  
+  #head(table(freq), 20)   
+  
+  #tail(table(freq), 20)   
+  
+  #For a less, fine-grained look at term freqency we can view a table of the terms we selected when we removed sparse terms, above. (Look just under the word "Focus".)
+  freq <- colSums(as.matrix(dtms))   
+ # freq
+  
+  
+  #The above matrix was created using a data transformation we made earlier. What follows is an alternative that will accomplish essentially the same thing.
+  freq <- sort(colSums(as.matrix(dtm)), decreasing=TRUE)   
+ # head(freq, 14) 
+  
+#   An alternate view of term frequency:
+#     This will identify all terms that appear frequently (in this case, 50 or more times).
+  
+  findFreqTerms(dtm, lowfreq=200)   # Change "50" to whatever is most appropriate for your text data.
+#   
+#   Yet another way to do this:
+#     
+    wf <- data.frame(word=names(freq), freq=freq)   
+  head(wf)
+  
+#   Nice bar plot
+#   Plot Word Frequencies
+#   Plot words that appear at least 50 times.
+  library(ggplot2)   
+  p <- ggplot(subset(wf, freq>500), aes(word, freq))    
+  p <- p + geom_bar(stat="identity")   
+  p <- p + theme(axis.text.x=element_text(angle=45, hjust=1))   
+  p  
+  
+  #interesting association
+  #If words always appear together, then correlation=1.0.
+  findAssocs(dtm, c("fee" , "airbnb"), corlimit=0.98) # specifying a correlation limit of 0.98  
+#   $fee
+#    avoid expens 
+#    0.98    0.98 
+#   
+#   $airbnb
+#   advertis     soon 
+#   0.99     0.99 
+  
+ # In this case, "question" and "analysi" were highly correlated with numerous other terms. Setting corlimit= to 0.98 prevented the list from being overly long. Feel free to adjust the corlimit= to any value you feel is necessary.
+  
+  findAssocs(dtms, "contrast", corlimit=0.90) # specifying a correlation limit of 0.95   
+  
+  # Wordcloud at least 25 times
+  library(wordcloud) 
+  set.seed(142)   
+  wordcloud(names(freq), freq, min.freq=25)  
+  
+  
+  #Plot the 100 most frequently used words.
+  
+  set.seed(142)   
+  wordcloud(names(freq), freq, max.words=100) 
+  
+  #Add some color and plot words occurring at least 20 times.
+  
+  set.seed(142)   
+  wordcloud(names(freq), freq, min.freq=25, scale=c(5, .1), colors=brewer.pal(6, "Dark2")) 
+  
+ # Plot the 100 most frequently occurring words.
+  set.seed(142)   
+  dark2 <- brewer.pal(6, "Dark2")   
+  wordcloud(names(freq), freq, max.words=100, rot.per=0.2, colors=dark2) 
+  
+  
+ # Clustering by Term Similarity
+  #To do this well, you should always first remove a lot of the uninteresting or infrequent words. If you have not done so already, you can remove these with the following code.
+  
+  dtmss <- removeSparseTerms(dtm, 0.15) # This makes a matrix that is only 15% empty space, maximum.   
+  inspect(dtmss)  
+  
+  
+  #Hierarchal Clustering
+  #First calculate distance between words & then cluster them according to similarity.
+  
+  library(cluster)   
+  d <- dist(t(dtmss), method="euclidian")   
+  fit <- hclust(d=d, method="ward")   
+  fit  
+  
+  plot(fit, hang=-1)   
+#   
+#   Helping to Read a Dendrogram
+#   If you find dendrograms difficult to read, then there is still hope.
+#   To get a better idea of where the groups are in the dendrogram, you can also ask R to help identify the clusters. Here, I have arbitrarily chosen to look at five clusters, as indicated by the red boxes. If you would like to highlight a different number of groups, then feel free to change the code accordingly.
+#   
+  plot.new()
+  plot(fit, hang=-1)
+  groups <- cutree(fit, k=5)   # "k=" defines the number of clusters you are using   
+  rect.hclust(fit, k=5, border="red") # draw dendogram with red borders around the 5 clusters 
+  
+  
+#   K-means clustering
+#   The k-means clustering method will attempt to cluster words into a specified number of groups (in this case 2), such that the sum of squared distances between individual words and one of the group centers. You can change the number of groups you seek by changing the number specified within the kmeans() command.
+#   
+  library(fpc)   
+  d <- dist(t(dtmss), method="euclidian")   
+  kfit <- kmeans(d, 2)   
+  clusplot(as.matrix(d), kfit$cluster, color=T, shade=T, labels=2, lines=0)   
+ }
