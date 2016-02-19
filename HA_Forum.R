@@ -184,15 +184,15 @@ GetLinks <- function(Zurl)  {
 
 
 
-makeGraph <- function(all) {
+makeGraph <- function() {
 
 
-png("wordcloud_storm.png", width=1200,height=800)  
+png("HA_Forum.png", width=1200,height=800)  
 
 require(wordcloud) 
 require(tm)
 
-data <- read.csv("threadData//ALL.csv")
+#data <- files.df #read.csv("threadData//ALL.csv")
 
 
 #mydata = read.table("mydata.txt")
@@ -200,13 +200,13 @@ data <- read.csv("threadData//ALL.csv")
 pal <- brewer.pal(9,"YlGnBu")
 pal <- pal[-(1:4)]
 
-dataCorpus <- Corpus(VectorSource(data))
+dataCorpus <- Corpus(VectorSource(files.df))
 
 dataCorpus <- tm_map(dataCorpus, stripWhitespace)
 
 dataCorpus <- tm_map(dataCorpus, removeWords, stopwords("english"))
 
-#dataCorpus <- tm_map(dataCorpus, removeWords, c("excessive", "extreme", "unseasonal"))
+dataCorpus <- tm_map(dataCorpus, removeWords, c("will", "voir", "just","get","can"))
 
 dataCorpus <- tm_map(dataCorpus, PlainTextDocument)
 
